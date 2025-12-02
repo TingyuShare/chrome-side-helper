@@ -3,9 +3,10 @@
 
   "manifest_version": 3,
   "name": "Side Copilot",
-  "version": "1.0",
+  "version": "1.1",
   "description": "A side copilot for your browsing experience.",
   "permissions": ["storage", "tabs", "windows", "system.display"],
+  "incognito": "split",
   "action": {
     "default_title": "Open Side Copilot"
   },
