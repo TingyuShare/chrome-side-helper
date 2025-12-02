@@ -1,0 +1,28 @@
+{
+"update_url": "https://clients2.google.com/service/update2/crx",
+
+  "manifest_version": 3,
+  "name": "Side Copilot",
+  "version": "1.0",
+  "description": "A side copilot for your browsing experience.",
+  "permissions": ["storage", "tabs", "windows", "system.display"],
+  "action": {
+    "default_title": "Open Side Copilot"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "options.html",
+  "icons": {
+    "128": "icon.png"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+H",
+        "mac": "Command+Shift+H"
+      },
+      "description": "Toggle Side Copilot"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Side Copilot Options</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 1em;
+    }
+    label {
+      display: block;
+      margin-bottom: 0.5em;
+    }
+    input[type="text"] {
+      width: 300px;
+      padding: 0.5em;
+    }
+    button {
+      margin-top: 1em;
+      padding: 0.5em 1em;
+      border: 1px solid #ccc;
+      background-color: #f0f0f0;
+      cursor: pointer;
+    }
+    #status {
+      margin-top: 1em;
+      color: green;
+    }
+  </style>
+</head>
+<body>
+  <h1>Side Copilot Options</h1>
+  <label for="url">Website URL:</label>
+  <input type="text" id="url" placeholder="https://www.perplexity.ai/">
+  <button id="save">Save</button>
+  <div id="status"></div>
+  <script src="options.js"></script>
+</body>
+</html>
