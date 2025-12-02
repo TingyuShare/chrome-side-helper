@@ -46,36 +46,59 @@ chrome.action.onClicked.addListener(async (tab) => {
   const { aiSiteUrl, defaultAiSiteUrl } = await chrome.storage.sync.get(['aiSiteUrl', 'defaultAiSiteUrl']);
   const url = aiSiteUrl || defaultAiSiteUrl || 'https://www.perplexity.ai/';
 
-  // --- Toggle Off Logic ---
-  if (sessionState.popupWindowId !== null) {
+  // --- Cleanup Safety Net ---
+  const potentialTabs = await chrome.tabs.query({ url: `${new URL(url).origin}/*` });
+  for (const t of potentialTabs) {
     try {
-      await chrome.windows.get(sessionState.popupWindowId);
-      // A session is active, so turn it off.
-      await chrome.windows.update(sessionState.popupWindowId, { state: "minimized" });
-      if (sessionState.originalMainWindowId && sessionState.originalMainWindowBounds) {
-        await chrome.windows.update(sessionState.originalMainWindowId, {
-          state: sessionState.originalMainWindowBounds.state
-        });
+      const win = await chrome.windows.get(t.windowId);
+      if (win.type === 'popup' && win.id !== sessionState.popupWindowId) {
+        console.log(`Cleaning up orphaned popup window: ${win.id}`);
+        await chrome.windows.remove(win.id);
       }
-      await clearSession();
-    } catch (e) {
-      console.log("Popup window not found, clearing session.", e);
-      await clearSession();
-    }
-    return;
+    } catch (e) { /* Ignore errors */ }
   }
+  // --- End Cleanup ---
 
-  // --- Create Logic ---
-  const currentWindow = await chrome.windows.get(tab.windowId);
   const displayInfo = await chrome.system.display.getInfo();
   const primaryDisplay = displayInfo.find(d => d.isPrimary) || displayInfo[0];
   const screenWidth = primaryDisplay.workArea.width;
   const screenHeight = primaryDisplay.workArea.height;
   const mobilePopupWidth = 400;
   const newMainWindowWidth = screenWidth - mobilePopupWidth;
-  const popupLeftPosition = screenWidth - mobilePopupWidth;
 
-  // Store main window state and resize it.
+  // --- Toggle Logic ---
+  if (sessionState.popupWindowId !== null) {
+    try {
+      const popupWindow = await chrome.windows.get(sessionState.popupWindowId);
+      if (popupWindow.state === 'minimized') {
+        // --- SHOW ---
+        await chrome.windows.update(sessionState.popupWindowId, { state: 'normal', focused: true });
+        if (sessionState.originalMainWindowId) {
+          await chrome.windows.update(sessionState.originalMainWindowId, {
+            left: 0, top: 0, width: newMainWindowWidth, height: screenHeight, state: "normal"
+          });
+        }
+      } else {
+        // --- HIDE ---
+        await chrome.windows.update(sessionState.popupWindowId, { state: 'minimized' });
+        if (sessionState.originalMainWindowId) {
+          // Always maximize the main window when hiding the popup.
+          await chrome.windows.update(sessionState.originalMainWindowId, {
+            state: "maximized"
+          });
+        }
+      }
+    } catch (e) {
+      console.log("Tracked popup window not found, clearing session.", e);
+      await clearSession();
+      // We return here, forcing user to click again to create a new window.
+    }
+    return;
+  }
+
+  // --- Create Logic ---
+  const currentWindow = await chrome.windows.get(tab.windowId);
+  
   sessionState.originalMainWindowId = currentWindow.id;
   sessionState.originalMainWindowBounds = {
     left: currentWindow.left, top: currentWindow.top, width: currentWindow.width,
@@ -85,27 +108,23 @@ chrome.action.onClicked.addListener(async (tab) => {
     left: 0, top: 0, width: newMainWindowWidth, height: screenHeight, state: "normal"
   });
 
-  // Create the popup window.
   const newPopupWindow = await chrome.windows.create({
     url: url,
     type: 'popup',
-    left: popupLeftPosition,
+    left: screenWidth - mobilePopupWidth,
     top: 0,
     width: mobilePopupWidth,
     height: screenHeight,
   });
   sessionState.popupWindowId = newPopupWindow.id;
 
-  // Persist the session state.
   await chrome.storage.local.set({ session: sessionState });
   console.log("Session state saved.", sessionState);
 });
 
 chrome.windows.onRemoved.addListener(async (windowId) => {
-  // Check if the closed window is the one we are tracking.
   if (sessionState.popupWindowId && windowId === sessionState.popupWindowId) {
     console.log("Popup window was closed manually.");
-    // Restore the main window if we have its state.
     if (sessionState.originalMainWindowId && sessionState.originalMainWindowBounds) {
       try {
         await chrome.windows.update(sessionState.originalMainWindowId, {
@@ -119,7 +138,6 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
         console.log("Could not restore main window, it might have been closed.", e);
       }
     }
-    // The session is over.
     await clearSession();
   }
 });
