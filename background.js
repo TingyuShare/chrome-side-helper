@@ -70,9 +70,24 @@ chrome.action.onClicked.addListener(async (tab) => {
   if (sessionState.popupWindowId !== null) {
     try {
       const popupWindow = await chrome.windows.get(sessionState.popupWindowId);
-      if (popupWindow.state === 'minimized') {
+      if (popupWindow.state === 'minimized' || popupWindow.state === 'maximized') {
         // --- SHOW ---
-        await chrome.windows.update(sessionState.popupWindowId, { state: 'normal', focused: true });
+        const popupTabs = await chrome.tabs.query({ windowId: sessionState.popupWindowId });
+        if (popupTabs.length > 0) {
+          try {
+            await chrome.tabs.setZoom(popupTabs[0].id, 0); // Reset zoom
+          } catch (e) {
+            console.log("Could not set zoom on tab, it might have been closed or is inaccessible.", e);
+          }
+        }
+        await chrome.windows.update(sessionState.popupWindowId, {
+          left: screenWidth - mobilePopupWidth,
+          top: 0,
+          width: mobilePopupWidth,
+          height: screenHeight,
+          state: 'normal',
+          focused: true
+        });
         if (sessionState.originalMainWindowId) {
           await chrome.windows.update(sessionState.originalMainWindowId, {
             left: 0, top: 0, width: newMainWindowWidth, height: screenHeight, state: "normal"
@@ -116,6 +131,13 @@ chrome.action.onClicked.addListener(async (tab) => {
     width: mobilePopupWidth,
     height: screenHeight,
   });
+  if (newPopupWindow.tabs && newPopupWindow.tabs.length > 0) {
+    try {
+      await chrome.tabs.setZoom(newPopupWindow.tabs[0].id, 0); // Reset zoom on creation
+    } catch (e) {
+      console.log("Could not set zoom on new tab, it might have been closed or is inaccessible.", e);
+    }
+  }
   sessionState.popupWindowId = newPopupWindow.id;
 
   await chrome.storage.local.set({ session: sessionState });
