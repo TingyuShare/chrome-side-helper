@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Side Copilot</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 8px;
+      background-color: #f9f9f9;
+      color: #333;
+      width: 250px;
+    }
+    h1 {
+      font-size: 1em;
+      margin: 4px 8px 12px;
+      text-align: center;
+      color: #555;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between; /* Ensure space between text and shortcut */
+      padding: 10px 12px;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: background-color 0.2s;
+    }
+    li:hover {
+      background-color: #e9e9e9;
+    }
+    li img {
+      width: 16px;
+      height: 16px;
+      margin-right: 12px;
+    }
+    .site-item-main {
+      display: flex;
+      align-items: center;
+    }
+    li span {
+      font-weight: 500;
+      font-size: 0.95em;
+    }
+    .separator {
+      height: 1px;
+      background-color: #ddd;
+      margin: 8px 0;
+    }
+    #open-options, #toggle-panel {
+      font-size: 0.85em;
+      color: #007aff;
+    }
+    #open-options:hover, #toggle-panel:hover {
+      background-color: #e9e9e9;
+    }
+    .shortcut {
+      color: #888;
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+  <h1>Side Copilot</h1>
+  <ul id="site-list">
+    <!-- Sites will be dynamically added here -->
+  </ul>
+  <div class="separator"></div>
+  <div id="actions-container">
+      <li id="toggle-panel">
+        <span>Toggle/Hide Side Panel</span>
+        <span id="toggle-shortcut" class="shortcut"></span>
+      </li>
+      <li id="open-options">
+        <span>Manage Sites (Options)</span>
+      </li>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

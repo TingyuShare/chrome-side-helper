@@ -1,63 +1,29 @@
 // In-memory state, acts as a cache. The source of truth is chrome.storage.local.
-// With "incognito": "split", each mode (normal/incognito) gets its own instance of this script,
-// so this state is not shared between them.
 let sessionState = {
   popupWindowId: null,
   originalMainWindowId: null,
   originalMainWindowBounds: null,
 };
 
-// Function to initialize state from storage.
-async function initStateFromStorage() {
-  const stored = await chrome.storage.local.get('session');
-  if (stored.session && stored.session.popupWindowId) {
-    try {
-      await chrome.windows.get(stored.session.popupWindowId);
-      sessionState = stored.session;
-      console.log("Session state restored from storage.", sessionState);
-    } catch (e) {
-      console.log("Stale session found in storage. Clearing.");
-      await clearSession();
-    }
-  }
-}
-
-// Function to clear session from storage and memory.
-async function clearSession() {
-  await chrome.storage.local.remove('session');
-  sessionState = {
-    popupWindowId: null,
-    originalMainWindowId: null,
-    originalMainWindowBounds: null,
-  };
-  console.log("Session cleared.");
-}
-
-// Add listeners to initialize state on startup and clear on install/update.
-chrome.runtime.onStartup.addListener(initStateFromStorage);
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.runtime.openOptionsPage();
-  clearSession();
-});
-
-chrome.action.onClicked.addListener(async (tab) => {
+// --- Core Function to Open/Update the Side Panel ---
+async function openOrUpdateSidePanel(newUrl) { // The URL for a new site, or null for a toggle
   await initStateFromStorage();
 
-  const { aiSiteUrl, defaultAiSiteUrl } = await chrome.storage.sync.get(['aiSiteUrl', 'defaultAiSiteUrl']);
-  const url = aiSiteUrl || defaultAiSiteUrl || 'https://www.perplexity.ai/';
-
-  // --- Cleanup Safety Net ---
-  const potentialTabs = await chrome.tabs.query({ url: `${new URL(url).origin}/*` });
-  for (const t of potentialTabs) {
-    try {
-      const win = await chrome.windows.get(t.windowId);
-      if (win.type === 'popup' && win.id !== sessionState.popupWindowId) {
-        console.log(`Cleaning up orphaned popup window: ${win.id}`);
-        await chrome.windows.remove(win.id);
-      }
-    } catch (e) { /* Ignore errors */ }
+  let targetUrl = newUrl;
+  if (!targetUrl) {
+    // If no URL is provided for opening, it's a toggle. Use the last-used URL.
+    const result = await chrome.storage.local.get('lastUsedUrl');
+    if (result.lastUsedUrl) {
+      targetUrl = result.lastUsedUrl;
+    } else {
+      // Fallback to the first site in sync storage or a hardcoded default.
+      const syncData = await chrome.storage.sync.get({ sites: [{ url: 'https://www.perplexity.ai/' }] });
+      targetUrl = syncData.sites[0].url;
+    }
+  } else {
+    // If a new URL was provided, save it as the last-used for future toggles.
+    await chrome.storage.local.set({ lastUsedUrl: newUrl });
   }
-  // --- End Cleanup ---
 
   const displayInfo = await chrome.system.display.getInfo();
   const primaryDisplay = displayInfo.find(d => d.isPrimary) || displayInfo[0];
@@ -66,27 +32,25 @@ chrome.action.onClicked.addListener(async (tab) => {
   const mobilePopupWidth = 400;
   const newMainWindowWidth = screenWidth - mobilePopupWidth;
 
-  // --- Toggle Logic ---
+  // If a popup window is already tracked
   if (sessionState.popupWindowId !== null) {
     try {
-      const popupWindow = await chrome.windows.get(sessionState.popupWindowId);
-      if (popupWindow.state === 'minimized' || popupWindow.state === 'maximized') {
-        // --- SHOW ---
-        const popupTabs = await chrome.tabs.query({ windowId: sessionState.popupWindowId });
-        if (popupTabs.length > 0) {
-          try {
-            await chrome.tabs.setZoom(popupTabs[0].id, 0); // Reset zoom
-          } catch (e) {
-            console.log("Could not set zoom on tab, it might have been closed or is inaccessible.", e);
-          }
-        }
+      const popupWindow = await chrome.windows.get(sessionState.popupWindowId, { populate: true });
+      const popupTab = popupWindow.tabs && popupWindow.tabs[0];
+
+      // If a new URL was explicitly passed and it's different, update the tab.
+      if (newUrl && popupTab && popupTab.url !== newUrl) {
+        await chrome.tabs.update(popupTab.id, { url: newUrl });
+      }
+
+      // --- Toggle Visibility Logic ---
+      // SHOW if: a) a new URL was clicked, or b) it's a toggle for a minimized window.
+      // HIDE if: it's a toggle for an already visible window.
+      if (newUrl || popupWindow.state === 'minimized') {
+        // --- SHOW / FOCUS ---
         await chrome.windows.update(sessionState.popupWindowId, {
-          left: screenWidth - mobilePopupWidth,
-          top: 0,
-          width: mobilePopupWidth,
-          height: screenHeight,
-          state: 'normal',
-          focused: true
+          left: screenWidth - mobilePopupWidth, top: 0, width: mobilePopupWidth, height: screenHeight,
+          state: 'normal', focused: true
         });
         if (sessionState.originalMainWindowId) {
           await chrome.windows.update(sessionState.originalMainWindowId, {
@@ -97,23 +61,21 @@ chrome.action.onClicked.addListener(async (tab) => {
         // --- HIDE ---
         await chrome.windows.update(sessionState.popupWindowId, { state: 'minimized' });
         if (sessionState.originalMainWindowId) {
-          // Always maximize the main window when hiding the popup.
-          await chrome.windows.update(sessionState.originalMainWindowId, {
-            state: "maximized"
-          });
+          await chrome.windows.update(sessionState.originalMainWindowId, { state: "maximized" });
         }
       }
+      return; // Early exit after toggling/updating
     } catch (e) {
       console.log("Tracked popup window not found, clearing session.", e);
       await clearSession();
-      // We return here, forcing user to click again to create a new window.
+      // Fall through to creation logic
     }
-    return;
   }
 
   // --- Create Logic ---
-  const currentWindow = await chrome.windows.get(tab.windowId);
-  
+  const currentWindow = await chrome.windows.getLastFocused({ windowTypes: ['normal'] });
+  if (!currentWindow) return;
+
   sessionState.originalMainWindowId = currentWindow.id;
   sessionState.originalMainWindowBounds = {
     left: currentWindow.left, top: currentWindow.top, width: currentWindow.width,
@@ -124,24 +86,31 @@ chrome.action.onClicked.addListener(async (tab) => {
   });
 
   const newPopupWindow = await chrome.windows.create({
-    url: url,
-    type: 'popup',
-    left: screenWidth - mobilePopupWidth,
-    top: 0,
-    width: mobilePopupWidth,
-    height: screenHeight,
+    url: targetUrl, type: 'popup',
+    left: screenWidth - mobilePopupWidth, top: 0, width: mobilePopupWidth, height: screenHeight,
   });
-  if (newPopupWindow.tabs && newPopupWindow.tabs.length > 0) {
-    try {
-      await chrome.tabs.setZoom(newPopupWindow.tabs[0].id, 0); // Reset zoom on creation
-    } catch (e) {
-      console.log("Could not set zoom on new tab, it might have been closed or is inaccessible.", e);
-    }
-  }
-  sessionState.popupWindowId = newPopupWindow.id;
 
+  sessionState.popupWindowId = newPopupWindow.id;
   await chrome.storage.local.set({ session: sessionState });
   console.log("Session state saved.", sessionState);
+}
+
+// --- Event Listeners ---
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'openSidePanel') {
+    openOrUpdateSidePanel(request.url);
+    sendResponse({ status: 'opening' });
+  } else if (request.action === 'toggleSidePanel') {
+    openOrUpdateSidePanel(null); // Pass null to toggle
+    sendResponse({ status: 'toggling' });
+  }
+  return true;
+});
+
+chrome.commands.onCommand.addListener((command) => {
+  if (command === "toggle-panel") {
+    openOrUpdateSidePanel(null);
+  }
 });
 
 chrome.windows.onRemoved.addListener(async (windowId) => {
@@ -157,9 +126,40 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
           state: sessionState.originalMainWindowBounds.state
         });
       } catch (e) {
-        console.log("Could not restore main window, it might have been closed.", e);
+        console.log("Could not restore main window.", e);
       }
     }
     await clearSession();
   }
+});
+
+// --- Utility Functions for State Management ---
+async function initStateFromStorage() {
+  const stored = await chrome.storage.local.get('session');
+  if (stored.session && stored.session.popupWindowId) {
+    try {
+      await chrome.windows.get(stored.session.popupWindowId);
+      sessionState = stored.session;
+    } catch (e) {
+      await clearSession();
+    }
+  }
+}
+
+async function clearSession() {
+  await chrome.storage.local.remove('session');
+  sessionState = {
+    popupWindowId: null,
+    originalMainWindowId: null,
+    originalMainWindowBounds: null,
+  };
+}
+
+// --- Lifecycle Hooks ---
+chrome.runtime.onStartup.addListener(initStateFromStorage);
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install') {
+    chrome.runtime.openOptionsPage();
+  }
+  clearSession();
 });

@@ -4,36 +4,112 @@
   <title>Side Copilot Options</title>
   <style>
     body {
-      font-family: sans-serif;
-      margin: 1em;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 2em;
+      background-color: #f9f9f9;
+      color: #333;
+    }
+    h1 {
+      font-size: 1.5em;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 0.5em;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 2em;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .form-group {
+      margin-bottom: 1.5em;
     }
     label {
       display: block;
       margin-bottom: 0.5em;
+      font-weight: 600;
     }
     input[type="text"] {
-      width: 300px;
-      padding: 0.5em;
+      width: calc(100% - 1em);
+      padding: 0.75em 0.5em;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 1em;
     }
     button {
-      margin-top: 1em;
-      padding: 0.5em 1em;
-      border: 1px solid #ccc;
-      background-color: #f0f0f0;
+      padding: 0.75em 1.5em;
+      border: none;
+      border-radius: 4px;
+      background-color: #007aff;
+      color: white;
+      font-size: 1em;
       cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    button:hover {
+      background-color: #005bb5;
     }
     #status {
       margin-top: 1em;
-      color: green;
+      color: #28a745;
+      font-weight: 600;
+    }
+    #site-list {
+      list-style: none;
+      padding: 0;
+      margin-top: 2em;
+    }
+    .site-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1em;
+      background-color: #f0f0f0;
+      border-radius: 4px;
+      margin-bottom: 0.5em;
+    }
+    .site-item span {
+      font-weight: 500;
+    }
+    .site-item .url {
+      color: #666;
+      font-size: 0.9em;
+      margin-left: 1em;
+    }
+    .remove-btn {
+      background-color: #dc3545;
+      font-size: 0.8em;
+      padding: 0.5em 1em;
+    }
+    .remove-btn:hover {
+      background-color: #c82333;
     }
   </style>
 </head>
 <body>
-  <h1>Side Copilot Options</h1>
-  <label for="url">Website URL:</label>
-  <input type="text" id="url" placeholder="https://www.perplexity.ai/">
-  <button id="save">Save</button>
-  <div id="status"></div>
+  <div class="container">
+    <h1>Side Copilot Options</h1>
+    
+    <div class="form-group">
+      <label for="site-name">Site Name:</label>
+      <input type="text" id="site-name" placeholder="e.g., Google">
+    </div>
+
+    <div class="form-group">
+      <label for="site-url">Website URL:</label>
+      <input type="text" id="site-url" placeholder="https://www.google.com">
+    </div>
+
+    <button id="add-site">Add Site</button>
+    <div id="status"></div>
+
+    <h2>Saved Sites</h2>
+    <ul id="site-list">
+      <!-- Sites will be dynamically added here -->
+    </ul>
+  </div>
+
   <script src="options.js"></script>
 </body>
 </html>

@@ -3,12 +3,13 @@
 
   "manifest_version": 3,
   "name": "Side Copilot",
-  "version": "1.1",
+  "version": "1.2",
   "description": "A side copilot for your browsing experience.",
   "permissions": ["storage", "tabs", "windows", "system.display"],
   "incognito": "split",
   "action": {
-    "default_title": "Open Side Copilot"
+    "default_title": "Open Side Copilot",
+    "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "background.js"
@@ -18,7 +19,7 @@
     "128": "icon.png"
   },
   "commands": {
-    "_execute_action": {
+    "toggle-panel": {
       "suggested_key": {
         "default": "Ctrl+Shift+H",
         "mac": "Command+Shift+H"
